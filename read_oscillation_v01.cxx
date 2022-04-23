@@ -22,6 +22,11 @@ using namespace std;
 //cout<<endl<<" ---> check time duration "<<time_duration.count()<<endl<<endl;
 //milliseconds, minutes
 
+//
+// When do minimization, the initial values should not be at the exact edge.
+// Otherwise, the inital values may be automatically changed.
+//
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////// MAIN //////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -208,11 +213,20 @@ int main(int argc, char** argv)
   //osc_test->Minimization_OscPars_FullCov(100000, 0.2, 0, 0, "dm2_t24");
 
   ///////
-  
+
   if( 0 ) {
-    double pars_3v[4] = {0.1, 1e-4, 1e-4, 0};
-    double chi2_3v_4v = osc_test->FCN( pars_3v );
-    cout<<" ---> chi2_3v: "<<chi2_3v_4v<<endl;
+    //osc_test->Minimization_OscPars_FullCov(1.29532, 0.935754, 0, 0, "str_flag_fixpar");
+    osc_test->Minimization_OscPars_FullCov(2, 0.06, 0, 0, "abc");
+    
+    double pars_4v[4] = {osc_test->minimization_dm2_41_val, osc_test->minimization_sin2_2theta_14_val, osc_test->minimization_sin2_theta_24_val, 0};
+    double chi2_min = osc_test->FCN( pars_4v );
+    cout<<" ---> chi2_min: "<<chi2_min<<endl;
+
+    double pars_3v[4] = {0};
+    double chi2_null = osc_test->FCN( pars_3v );
+    cout<<" ---> chi2_null: "<<chi2_null<<endl;
+    cout<<endl;
+    cout<<" ---> diff: "<<chi2_null - chi2_min<<endl;
   }
 
   if( 0 ) {    
@@ -246,16 +260,28 @@ int main(int argc, char** argv)
   }
 
   if( 0 ) {
-    val_dm2_41         = 100;
-    val_sin2_2theta_14 = 0.1;
-    val_sin2_theta_24  = 0.01;  
-    osc_test->Set_oscillation_pars(val_dm2_41, val_sin2_2theta_14, val_sin2_theta_24, val_sin2_theta_34);  
+
+    osc_test->Set_oscillation_pars(0, 0, 0, 0);
+    osc_test->Apply_oscillation();
+    osc_test->Set_apply_POT();// meas, CV, COV: all ready
+    TMatrixD matrix_noosc = osc_test->matrix_eff_newworld_pred;
+    TMatrixD matrix_noosc_cov = osc_test->matrix_eff_newworld_abs_syst_total;
+    
+    val_dm2_41         = 1.29532;
+    val_sin2_2theta_14 = 0.935754;
+    val_sin2_theta_24  = 0;    
+    osc_test->Set_oscillation_pars(val_dm2_41, val_sin2_2theta_14, val_sin2_theta_24, 0);  
     osc_test->Apply_oscillation();
     osc_test->Set_apply_POT();// meas, CV, COV: all ready
 
     TFile *out_spectra = new TFile("out_spectra.root", "recreate");
-    osc_test->matrix_eff_newworld_pred.Write("matrix_pred");
+    osc_test->matrix_eff_newworld_meas.Write("matrix_meas");    
+    matrix_noosc.Write("matrix_pred_noosc");
+    matrix_noosc_cov.Write("matrix_systcov_noosc");
+    osc_test->matrix_eff_newworld_pred.Write("matrix_pred_bestfit");
+    osc_test->matrix_eff_newworld_abs_syst_total.Write("matrix_systcov_bestfit");
     out_spectra->Close();
+    
   }
   
   // BNB fixed baseline = 470m
@@ -451,8 +477,8 @@ int main(int argc, char** argv)
    
   /////////////////////////////////////////////////////////// 
   
-  if( 1 ) {
-    cout<<endl<<" ---> Asimov scan"<<endl<<endl;
+  if( 0 ) {
+    cout<<endl<<" ---> Asimov scan grids"<<endl<<endl;
     
     val_dm2_41         = 7.3;
     val_sin2_2theta_14 = 0.1;
@@ -567,11 +593,98 @@ int main(int argc, char** argv)
   /////////////////////////////////////////////////////////// 
   
   if( 0 ) {
-    cout<<endl<<" ---> Pseudo Expt. and fitting"<<endl<<endl;
+    cout<<endl<<" ---> fitting with fixed dm2 and t24"<<endl<<endl;
     
     val_dm2_41         = 7.3;
     val_sin2_2theta_14 = 0.1;
     val_sin2_theta_24  = 0.01;
+
+    int    min_status             = 10;
+    int    flag_negative          = 0;
+    int    idx_dm2                = 0;
+    int    idx_t24                = 0;
+    double min_chi2               = 0;
+    double min_dm2_41_val         = 0;
+    double min_sin2_2theta_14_val = 0;
+    double min_sin2_theta_24_val  = 0;
+    double min_sin2_theta_34_val  = 0;
+
+    osc_test->Set_oscillation_pars(val_dm2_41, val_sin2_2theta_14, val_sin2_theta_24, 0);  
+    osc_test->Apply_oscillation();
+    osc_test->Set_apply_POT();// meas, CV, COV: all ready   
+
+    roostr = TString::Format("sub_fit_%02d.root", idm2);
+    TFile *subroofile = new TFile(roostr, "recreate");
+    TTree *tree = new TTree("tree", "tree");
+    
+    tree->Branch( "min_status",             &min_status,             "min_status/I" );
+    tree->Branch( "flag_negative",          &flag_negative,          "flag_negative/I" );
+    tree->Branch( "idx_dm2",                &idx_dm2,                "idx_dm2/I" );
+    tree->Branch( "idx_t24",                &idx_t24,                "idx_t24/I" );
+    tree->Branch( "min_chi2",               &min_chi2,               "min_chi2/D" );
+    tree->Branch( "min_dm2_41_val",         &min_dm2_41_val,         "min_dm2_41_val/D" );
+    tree->Branch( "min_sin2_2theta_14_val", &min_sin2_2theta_14_val, "min_sin2_2theta_14_val/D" );
+    tree->Branch( "min_sin2_theta_24_val",  &min_sin2_theta_24_val,  "min_sin2_theta_24_val/D" );
+    tree->Branch( "min_sin2_theta_34_val",  &min_sin2_theta_34_val,  "min_sin2_theta_34_val/D" );
+
+    /////// X: sin22t14, 1e-4 -> 1   ---> "log10()" ---> -4 -> 0
+    /////// Y: m41^2,    1e-1 -> 1e2  ---> "log10()" ---> -1 -> 2
+    int bins_theta = 60;
+    int bins_dm2   = 60;      
+    TH2D *h2_space = new TH2D("h2_space_whole", "h2_space_whole", bins_theta, -4, 0, bins_dm2, -1, 2);
+    h2_space->SetBinContent(1,1,1);
+
+    
+    for(int itoy=1; itoy<=1; itoy++) {
+
+      cout<<endl<<" ---> proceesing toy "<<itoy<<endl;
+      
+      osc_test->Set_oscillation_pars(val_dm2_41, val_sin2_2theta_14, val_sin2_theta_24, 0);  
+      osc_test->Apply_oscillation();
+      osc_test->Set_apply_POT();// meas, CV, COV: all ready
+      osc_test->Set_meas2fitdata();
+      //osc_test->Set_asimov2fitdata();
+      //osc_test->Set_toy_variations( 1 );
+      //osc_test->Set_toy2fitdata( 1 );
+             
+      double dm2_val = 0;
+      double t24_val = 0;
+	    
+      dm2_val = pow(10, h2_space->GetYaxis()->GetBinCenter(idm2) );
+
+      for(int jt24=1; jt24<=bins_theta; jt24++) {
+	cout<<" ---> fit1par "<<idm2<<"\t"<<jt24<<endl;
+	
+	t24_val = pow(10, h2_space->GetXaxis()->GetBinCenter(jt24) );
+	
+	osc_test->Minimization_OscPars_FullCov(dm2_val, 0.1, t24_val, 0, "dm2_t24");
+	
+	min_status            = osc_test->minimization_status;
+	min_chi2              = osc_test->minimization_chi2;
+	min_dm2_41_val        = osc_test->minimization_dm2_41_val;
+	min_sin2_2theta_14_val= osc_test->minimization_sin2_2theta_14_val;
+	min_sin2_theta_24_val = osc_test->minimization_sin2_theta_24_val;
+	min_sin2_theta_34_val = 0;
+
+	idx_dm2 = idm2;
+	idx_t24 = jt24;
+	
+	tree->Fill();
+      }
+    }
+
+    tree->Write();
+    subroofile->Close();
+  }  
+  
+  /////////////////////////////////////////////////////////// 
+  
+  if( 0 ) {
+    cout<<endl<<" ---> Pseudo Expt. and fitting"<<endl<<endl;
+    
+    val_dm2_41         = 0;
+    val_sin2_2theta_14 = 0;
+    val_sin2_theta_24  = 0;
 
     int    min_status             = 10;
     int    flag_negative          = 0;
@@ -658,9 +771,9 @@ int main(int argc, char** argv)
       osc_test->Set_oscillation_pars(val_dm2_41, val_sin2_2theta_14, val_sin2_theta_24, 0);  
       osc_test->Apply_oscillation();
       osc_test->Set_apply_POT();// meas, CV, COV: all ready
-      osc_test->Set_asimov2fitdata();	   
-      //osc_test->Set_toy_variations( 1 );
-      //osc_test->Set_toy2fitdata( 1 );
+      //osc_test->Set_asimov2fitdata();	   
+      osc_test->Set_toy_variations( 1 );
+      osc_test->Set_toy2fitdata( 1 );
       
       flag_negative = 0;
       
@@ -681,22 +794,24 @@ int main(int argc, char** argv)
       TH2D *h2_space = new TH2D("h2_space_whole", "h2_space_whole", bins_theta, -4, 0, bins_dm2, -1, 2);
       h2_space->SetBinContent(1,1,1);
       
-      for(int jdm2=1; jdm2<=num_dm2; jdm2++ ) {
+      for(int jdm2=1; jdm2<=bins_theta; jdm2++ ) {
+	//for(int jdm2=1; jdm2<=num_dm2; jdm2++ ) {
 	cout<<TString::Format(" ---> jdm2 %3d", jdm2)<<endl;
 	
-        for(int jt14=1; jt14<=num_t14; jt14++) {
-          //cout<<TString::Format(" ---> jdm2 %3d, jt14 %3d", jdm2, jt14)<<endl;
+        for(int jt14=1; jt14<=bins_theta; jt14++) {
+	  //for(int jt14=1; jt14<=num_t14; jt14++) {
+          cout<<TString::Format(" ---> jdm2 %3d, jt14 %3d", jdm2, jt14)<<endl;
 	  
           for(int jt24=1; jt24<=bins_theta; jt24++) {
-	  //for(int jt24=ifile; jt24<=ifile; jt24++) {
+	    //for(int jt24=ifile; jt24<=ifile; jt24++) {
 	    
             double dm2_val = dm2_low + jdm2*dm2_step;
             double t14_val = t14_low + jt14*t14_step;
             double t24_val = t24_low + jt24*t24_step;
 
-	    //dm2_val = pow(10, h2_space->GetYaxis()->GetBinCenter(jdm2));
-	    //t14_val = pow(10, h2_space->GetXaxis()->GetBinCenter(jt14));
-	    //t24_val = pow(10, h2_space->GetXaxis()->GetBinCenter(jt24));
+	    dm2_val = pow(10, h2_space->GetYaxis()->GetBinCenter(jdm2));
+	    t14_val = pow(10, h2_space->GetXaxis()->GetBinCenter(jt14));
+	    t24_val = pow(10, h2_space->GetXaxis()->GetBinCenter(jt24));
 	    
             pars_4v[0] = dm2_val;
             pars_4v[1] = t14_val;
@@ -708,10 +823,7 @@ int main(int argc, char** argv)
 	    //cout<<endl<<" ---> check time duration "<<time_duration.count()<<endl<<endl;
 	    //milliseconds, minutes
 	    
-	    auto time_start_AA = chrono::high_resolution_clock::now();
             double chi2_val = osc_test->FCN( pars_4v );// 1000 times ~ 3 min
-	    auto time_start_AB = chrono::high_resolution_clock::now();
-	    cout<<" ---> test "<<chrono::duration_cast<chrono::milliseconds>(time_start_AB - time_start_AA).count()<<endl;
 	    
 	    
             if( chi2_val<0 ) flag_negative++;
@@ -729,8 +841,8 @@ int main(int argc, char** argv)
       
       //osc_test->Minimization_OscPars_FullCov(obj_dm2, obj_t14, obj_t24, 0, "str_flag_fixpar");
 
-      //cout<<" ---> obj "<<obj_chi2<<"\t"<<obj_dm2<<"\t"<<obj_t14<<"\t"<<obj_t24<<endl;
-      osc_test->Minimization_OscPars_FullCov(obj_dm2, obj_t14, obj_t24, 0, "t24");
+      cout<<" ---> obj "<<obj_chi2<<"\t"<<obj_dm2<<"\t"<<obj_t14<<"\t"<<obj_t24<<endl;
+      osc_test->Minimization_OscPars_FullCov(obj_dm2, obj_t14, obj_t24, 0, "str");
       
       //osc_test->Minimization_OscPars_FullCov(val_dm2_41, val_sin2_2theta_14, val_sin2_theta_24, 0, "t24");
             
@@ -750,11 +862,11 @@ int main(int argc, char** argv)
       vec_pseudo_data.clear();
       vec_bestfit_pred.clear();
       vec_syst_rand.clear();    
-      // for(int idx=0; idx<osc_test->matrix_eff_newworld_pred.GetNcols(); idx++) {
-      //   vec_pseudo_data.push_back( osc_test->map_matrix_toy_pred[1](0, idx) );
-      //   vec_bestfit_pred.push_back( osc_test->matrix_eff_newworld_pred(0, idx) );
-      //   if( (int)(osc_test->vec_rand_syst.size())!=0 ) vec_syst_rand.push_back( osc_test->vec_rand_syst.at(idx) );
-      // }
+      for(int idx=0; idx<osc_test->matrix_eff_newworld_pred.GetNcols(); idx++) {
+	vec_pseudo_data.push_back( osc_test->map_matrix_toy_pred[1](0, idx) );
+	vec_bestfit_pred.push_back( osc_test->matrix_eff_newworld_pred(0, idx) );
+	//if( (int)(osc_test->vec_rand_syst.size())!=0 ) vec_syst_rand.push_back( osc_test->vec_rand_syst.at(idx) );
+      }
         
       tree->Fill();
     }
@@ -765,6 +877,147 @@ int main(int argc, char** argv)
     cout<<" xyzabc"<<endl;
   }
     
+  /////////////////////////////////////////////////////////// Profiling at each grid
+
+  if( 1 ) {
+    cout<<endl<<" ---> Profiling at each grid"<<endl;
+ 
+    int bins_theta = 60;
+    int bins_dm2   = 60;
+  
+    /////// X: sin22t14, 1e-4 -> 1   ---> "log10()" ---> -4 -> 0
+    /////// Y: m41^2,    1e-1 -> 1e2  ---> "log10()" ---> -1 -> 2
+    TH2D *h2_space = new TH2D("h2_space_whole", "h2_space_whole", bins_theta, -4, 0, bins_dm2, -1, 2);
+
+    ///////
+    val_dm2_41         = 7.3;
+    val_sin2_2theta_14 = 0.1;
+    val_sin2_theta_24  = 0.01;  
+    osc_test->Set_oscillation_pars(val_dm2_41, val_sin2_2theta_14, val_sin2_theta_24, val_sin2_theta_34);  
+    osc_test->Apply_oscillation();
+    osc_test->Set_apply_POT();// meas, CV, COV: all ready  
+    osc_test->Set_meas2fitdata();
+    
+    double pars_4v[4] = {0};
+
+    ///////
+    
+    int    min_status             = 10;
+    int    usr_idm2               = 0;
+    int    usr_it14               = 0;
+    double min_chi2               = 0;
+    double min_dm2_41_val         = 0;
+    double min_sin2_2theta_14_val = 0;
+    double min_sin2_theta_24_val  = 0;
+    double min_sin2_theta_34_val  = 0;
+    double min_dm2_41_err         = 0;
+    double min_sin2_2theta_14_err = 0;
+    double min_sin2_theta_24_err  = 0;
+    double min_sin2_theta_34_err  = 0;
+    
+    roostr = TString::Format("sub_fit_%02d_%02d.root", idm2, it14);
+    TFile *subroofile = new TFile(roostr, "recreate");
+    TTree *tree = new TTree("tree", "tree");
+    
+    tree->Branch( "min_status",             &min_status,             "min_status/I" );
+    tree->Branch( "usr_idm2",               &usr_idm2,               "usr_idm2/I" );
+    tree->Branch( "usr_it14",               &usr_it14,               "usr_it14/I" );    
+    tree->Branch( "min_chi2",               &min_chi2,               "min_chi2/D" );
+    tree->Branch( "min_dm2_41_val",         &min_dm2_41_val,         "min_dm2_41_val/D" );
+    tree->Branch( "min_sin2_2theta_14_val", &min_sin2_2theta_14_val, "min_sin2_2theta_14_val/D" );
+    tree->Branch( "min_sin2_theta_24_val",  &min_sin2_theta_24_val,  "min_sin2_theta_24_val/D" );
+    tree->Branch( "min_sin2_theta_34_val",  &min_sin2_theta_34_val,  "min_sin2_theta_34_val/D" );
+    tree->Branch( "min_dm2_41_err",         &min_dm2_41_err,         "min_dm2_41_err/D" );
+    tree->Branch( "min_sin2_2theta_14_err", &min_sin2_2theta_14_err, "min_sin2_2theta_14_err/D" );
+    tree->Branch( "min_sin2_theta_24_err",  &min_sin2_theta_24_err,  "min_sin2_theta_24_err/D" );
+    tree->Branch( "min_sin2_theta_34_err",  &min_sin2_theta_34_err,  "min_sin2_theta_34_err/D" );
+    
+    ///////
+
+    double array_t24[300] = {0};
+    for(int ii=0; ii<=100; ii++) {
+      array_t24[ii] = ii*0.0001;
+    }
+    for(int ii=1; ii<200; ii++) {
+      array_t24[ii+100] = ii*0.005;
+    }
+    
+    for(int jdm2=idm2; jdm2<=idm2; jdm2++) {      
+      for(int jt14=it14; jt14<=it14; jt14++) {
+	cout<<" ------> jdm2 "<<jdm2<<" jt14 "<<jt14<<endl;
+
+	double obj_chi2 = 1e10;
+	double obj_dm2 = pow(10, h2_space->GetYaxis()->GetBinCenter(jdm2));
+	double obj_t14 = pow(10, h2_space->GetXaxis()->GetBinCenter(jt14));
+	double obj_t24 = 0;
+	
+	for(int idx=0; idx<300; idx++) {
+	  if(idx%10==0) cout<<" ------> processing t24idx "<<idx<<endl;
+	  
+	  //double val_t24 = idx * 0.001;
+	  double val_t24 = array_t24[idx];
+	  double val_chi2 = 0;
+	  
+	  if( val_t24<=1 ) {	    
+	    pars_4v[0] = obj_dm2;
+	    pars_4v[1] = obj_t14;	
+	    pars_4v[2] = val_t24;
+	    val_chi2 = osc_test->FCN( pars_4v );
+	    
+	    if( val_chi2 < obj_chi2 ) {
+	      obj_chi2 = val_chi2;
+	      obj_t24 = val_t24;
+	    }
+	  }	  
+	  
+	}// for(int idx=0; idx<100; jdx++)
+
+	if( obj_t24==0 ) obj_t24 = 1e-8;
+	cout<<endl<<" ---> objtesta "<<obj_t24<<endl;
+	
+	osc_test->Minimization_OscPars_FullCov(obj_dm2, obj_t14, obj_t24, 0, "dm2_t14");
+
+	/////////// patch
+	/////////// patch
+	
+	if( osc_test->minimization_status!=0 ) {
+	  if( obj_t24<1e-7 ) {
+	    cout<<endl<<" ---> pactch_AA_minimization "<<endl<<endl;
+	    osc_test->Minimization_OscPars_FullCov(obj_dm2, obj_t14, 1e-7, 0, "dm2_t14");
+	  }
+	}
+	if( osc_test->minimization_status!=0 ) {
+	  if( obj_t24<1e-7 ) {
+	    cout<<endl<<" ---> pactch_AB_minimization "<<endl<<endl;
+	    osc_test->Minimization_OscPars_FullCov(obj_dm2, obj_t14, 1e-6, 0, "dm2_t14");
+	  }
+	}
+	
+	///////////
+	///////////
+	
+	min_status            = osc_test->minimization_status;
+	usr_idm2              = idm2;
+	usr_it14              = it14;
+	min_chi2              = osc_test->minimization_chi2;
+	min_dm2_41_val        = osc_test->minimization_dm2_41_val;
+	min_sin2_2theta_14_val= osc_test->minimization_sin2_2theta_14_val;
+	min_sin2_theta_24_val = osc_test->minimization_sin2_theta_24_val;
+	if(min_sin2_theta_24_val<1e-5) min_sin2_theta_24_val = 0;
+	min_sin2_theta_34_val = osc_test->minimization_sin2_theta_34_val;
+	min_dm2_41_err        = osc_test->minimization_dm2_41_err;
+	min_sin2_2theta_14_err= osc_test->minimization_sin2_2theta_14_err;
+	min_sin2_theta_24_err = osc_test->minimization_sin2_theta_24_err;
+	min_sin2_theta_34_err = osc_test->minimization_sin2_theta_34_err;
+	tree->Fill();
+	
+      }// for(int jt14=1; jt14<=bins_theta; jt14++)
+    }// for(int jdm2=1; jdm2<=bins_dm2; jdm2++)
+
+    tree->Write();
+    subroofile->Close();
+  }
+   
   /////////////////////////////////////////////////////////// FC CLs
   
   if( 0 ) {
@@ -787,7 +1040,7 @@ int main(int argc, char** argv)
 
     ///////////////////////////////////////////////////////////
     
-    if( 1 ) {
+    if( 0 ) {
       cout<<" ---> Asimov/Pseudo CLs "<<endl;
 
       vector<int> vec_dm2;

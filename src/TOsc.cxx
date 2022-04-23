@@ -59,6 +59,43 @@ double TOsc::FCN(const double *par)
   //// collapse the (numuCC FC, numuCC PC, CCpi0 FC, CCpi0 PC) into one bin --> numuCC bin: 26*4 --> 1
   ////
   /*
+  /// FC only
+  TMatrixD matrix_trans( matrix_eff_newworld_abs_syst_total.GetNrows(), 26*3);// oldworld, newworld
+  for(int idx=1; idx<=26; idx++) matrix_trans(idx-1, idx-1) = 1;// nueCC FC
+  for(int idx=1; idx<=26; idx++) matrix_trans(26*2 + idx-1, 26 + idx-1) = 1;// numuCC FC
+  for(int idx=1; idx<=26; idx++) matrix_trans(26*4 + idx-1, 26*2 + idx-1) = 1;// ccpi0 FC
+  TMatrixD matrix_trans_T = matrix_trans.T(); matrix_trans.T();
+
+  TMatrixD matrix_data_total = matrix_fitdata_newworld * matrix_trans;
+  TMatrixD matrix_pred_total = matrix_eff_newworld_pred * matrix_trans;
+  TMatrixD matrix_cov_syst_total = matrix_trans_T * matrix_eff_newworld_abs_syst_total * matrix_trans;
+  int rows = matrix_cov_syst_total.GetNrows();
+  */
+  /*
+  /// PC only
+  TMatrixD matrix_trans( matrix_eff_newworld_abs_syst_total.GetNrows(), 26*3);// oldworld, newworld
+  for(int idx=1; idx<=26; idx++) matrix_trans(26*1 + idx-1, idx-1) = 1;// nueCC PC
+  for(int idx=1; idx<=26; idx++) matrix_trans(26*3 + idx-1, 26 + idx-1) = 1;// numuCC PC
+  for(int idx=1; idx<=26; idx++) matrix_trans(26*5 + idx-1, 26*2 + idx-1) = 1;// ccpi0 PC
+  TMatrixD matrix_trans_T = matrix_trans.T(); matrix_trans.T();
+
+  TMatrixD matrix_data_total = matrix_fitdata_newworld * matrix_trans;
+  TMatrixD matrix_pred_total = matrix_eff_newworld_pred * matrix_trans;
+  TMatrixD matrix_cov_syst_total = matrix_trans_T * matrix_eff_newworld_abs_syst_total * matrix_trans;
+  int rows = matrix_cov_syst_total.GetNrows();
+  */
+  /*
+  /// numuCC FC
+  TMatrixD matrix_trans( matrix_eff_newworld_abs_syst_total.GetNrows(), 26*2);// oldworld, newworld
+  for(int idx=1; idx<=26*2; idx++) matrix_trans(idx-1, idx-1) = 1;
+  TMatrixD matrix_trans_T = matrix_trans.T(); matrix_trans.T();
+
+  TMatrixD matrix_data_total = matrix_fitdata_newworld * matrix_trans;
+  TMatrixD matrix_pred_total = matrix_eff_newworld_pred * matrix_trans;
+  TMatrixD matrix_cov_syst_total = matrix_trans_T * matrix_eff_newworld_abs_syst_total * matrix_trans;
+  int rows = matrix_cov_syst_total.GetNrows();
+  */
+  /*
   TMatrixD matrix_trans( matrix_eff_newworld_abs_syst_total.GetNrows(), 26*3 + 1 );// oldworld, newworld
   for(int idx=1; idx<=26*2; idx++) matrix_trans(idx-1, idx-1) = 1;// nueCC FC and PC
   for(int idx=1; idx<=26*4; idx++) matrix_trans(26*2 + idx-1, 26*2) = 1;// collapse to one bin
@@ -116,6 +153,8 @@ double TOsc::FCN(const double *par)
    
   TMatrixD matrix_chi2 = matrix_delta * matrix_cov_total_inv *matrix_delta_T;
   chi2_final = matrix_chi2(0,0);           
+
+  //cout<<" oooooo>>> "<<par[0]<<"\t"<<par[1]<<"\t"<<par[2]<<"\t"<<chi2_final<<endl;
   
   return chi2_final;
 }
@@ -129,7 +168,7 @@ void TOsc::Minimization_OscPars_FullCov(double init_dm2_41, double init_sin2_2th
   min_osc.SetStrategy(1); //0- cursory, 1- default, 2- thorough yet no more successful
   min_osc.SetMaxFunctionCalls(50000);
   min_osc.SetMaxIterations(50000);
-  min_osc.SetTolerance(1e-4); // tolerance*2e-3 = edm precision
+  min_osc.SetTolerance(1e-4);// 1e-4  // tolerance*2e-3 = edm precision
   min_osc.SetPrecision(1e-18); //precision in the target function
     
   /// set fitting parameters
@@ -144,7 +183,7 @@ void TOsc::Minimization_OscPars_FullCov(double init_dm2_41, double init_sin2_2th
   min_osc.SetVariable( 1, "sin2_theta_14", init_sin2_2theta_14, 1e-3);
   min_osc.SetVariable( 2, "sin2_theta_24", init_sin2_theta_24, 1e-3);
 
-  min_osc.SetLowerLimitedVariable(0, "dm2_41", init_dm2_41, 1e-3, 0);  
+  min_osc.SetLowerLimitedVariable(0, "dm2_41", init_dm2_41, 1e-3, 0);
   min_osc.SetLimitedVariable(1, "sin2_theta_14", init_sin2_2theta_14, 1e-3, 0, 1);
   min_osc.SetLimitedVariable(2, "sin2_theta_24", init_sin2_theta_24, 1e-3, 0, 1);
 
@@ -163,6 +202,7 @@ void TOsc::Minimization_OscPars_FullCov(double init_dm2_41, double init_sin2_2th
   ///////
     
   minimization_status = min_osc.Status();
+  
   minimization_chi2   = min_osc.MinValue();
     
   const double *par_val = min_osc.X();
@@ -177,6 +217,16 @@ void TOsc::Minimization_OscPars_FullCov(double init_dm2_41, double init_sin2_2th
   minimization_sin2_theta_24_val = par_val[2];
   minimization_sin2_theta_24_err = par_err[2];
 
+  if( par_val[0]!=par_val[0] ) minimization_status = 123;
+  if( par_val[1]!=par_val[1] ) minimization_status = 123;
+  if( par_val[2]!=par_val[2] ) minimization_status = 123;  
+  if( par_err[0]!=par_err[0] ) minimization_status = 124;
+  if( par_err[1]!=par_err[1] ) minimization_status = 124;
+  if( par_err[2]!=par_err[2] ) minimization_status = 124;
+
+  ///////
+  ///////
+  
   if(1) {
     cout<<endl;
     cout<<TString::Format(" ---> minimization, status %2d, chi2 %6.4f, dm2 %4.2f +/- %4.2f, s22t14 %5.3f +/- %5.3f",
