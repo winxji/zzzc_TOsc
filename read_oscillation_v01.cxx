@@ -952,7 +952,7 @@ int main(int argc, char** argv)
 	double obj_t24 = 0;
 	
 	for(int idx=0; idx<300; idx++) {
-	  if(idx%10==0) cout<<" ------> processing t24idx "<<idx<<endl;
+	  if(idx%10==0) cout<<"       ---> processing t24idx "<<idx<<endl;
 	  
 	  //double val_t24 = idx * 0.001;
 	  double val_t24 = array_t24[idx];
@@ -991,6 +991,22 @@ int main(int argc, char** argv)
 	    cout<<endl<<" ---> pactch_AB_minimization "<<endl<<endl;
 	    osc_test->Minimization_OscPars_FullCov(obj_dm2, obj_t14, 1e-6, 0, "dm2_t14");
 	  }
+	}
+	if( osc_test->minimization_status!=0 ) {
+	  if( obj_t24<1e-7 ) {
+	    cout<<endl<<" ---> pactch_AC_minimization "<<endl<<endl;
+	    osc_test->Minimization_OscPars_FullCov(obj_dm2, obj_t14, 1e-5, 0, "dm2_t14");
+	  }
+	}
+
+
+	if( osc_test->minimization_status!=0 ) {
+	  cout<<endl<<" ---> pactch_BA_minimization "<<endl<<endl;
+	  osc_test->Minimization_OscPars_FullCov(obj_dm2, obj_t14, osc_test->minimization_sin2_theta_24_val, 0, "dm2_t14");
+	}
+	if( osc_test->minimization_status!=0 ) {
+	  cout<<endl<<" ---> pactch_BB_minimization "<<endl<<endl;
+	  osc_test->Minimization_OscPars_FullCov(obj_dm2, obj_t14, osc_test->minimization_sin2_theta_24_val * 1.1, 0, "dm2_t14");
 	}
 	
 	///////////
