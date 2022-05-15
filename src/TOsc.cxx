@@ -153,8 +153,6 @@ double TOsc::FCN(const double *par)
    
   TMatrixD matrix_chi2 = matrix_delta * matrix_cov_total_inv *matrix_delta_T;
   chi2_final = matrix_chi2(0,0);           
-
-  //cout<<" oooooo>>> "<<par[0]<<"\t"<<par[1]<<"\t"<<par[2]<<"\t"<<chi2_final<<endl;
   
   return chi2_final;
 }
@@ -598,16 +596,16 @@ double TOsc::Prob_oscillaion(double Etrue, double baseline, int strflag_osc)// o
   case nue2nue:
     prob = 1 - effective_sin2_2theta_14 * sin2_Delta;
     //prob = 1;
-    //prob = 1 - sin2_2theta_14 * sin2_Delta;
+    prob = 1 - sin2_2theta_14 * sin2_Delta;
     break;
   case numu2numu:
     prob = 1 - 4*effective_cos2_theta_14*sin2_theta_24 * (1 - effective_cos2_theta_14*sin2_theta_24) * sin2_Delta;
-    //prob = 1;
+    prob = 1;
     //prob = 1 - sin2_2theta_14 * sin2_Delta;
     break;
   case numu2nue:
     prob = effective_sin2_2theta_14 * sin2_theta_24 * sin2_Delta;
-    //prob = 0;
+    prob = 0;
     //prob = 1;
     //prob = sin2_2theta_14 * sin2_Delta;
     break;
@@ -615,11 +613,11 @@ double TOsc::Prob_oscillaion(double Etrue, double baseline, int strflag_osc)// o
     break;
   case nueNC:
     prob = 1 - effective_sin2_2theta_14 * ( 1-sin2_theta_24 ) * sin2_Delta;// theta_34 = 0
-    //prob = 1;
+    prob = 1;
     break;
   case numuNC:
     prob = 1 - (effective_cos2_theta_14*effective_cos2_theta_14) * (4*sin2_theta_24*(1-sin2_theta_24)) * sin2_Delta;// theta_34 = 0
-    //prob = 1;
+    prob = 1;
     //prob = 1 - sin2_2theta_14 * sin2_Delta;
     break;
   default:
